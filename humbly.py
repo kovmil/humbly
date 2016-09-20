@@ -3,48 +3,45 @@ import sys
 import re
 from collections import Counter
 from collections import namedtuple
-#typedef struct PiledupStruct
-PileupStruct = namedtuple("PileupStruct", "chrom position ref coverage bases quality")
 
-#function for parsing string into PileupStruct structure
+#------------------------------- Functions ---------------------------------
+#Function for parsing string (lane from .pileup file) into PileupStruct structure
 def str_to_pileup_struct(str):
     spl = str.split()
-    #checking if coverage is >0
+    #Checking if coverage is >0, otherwise error occur
     if int(spl[3]) > 0:
         pile = PileupStruct(chrom=spl[0], position=spl[1], ref=spl[2], coverage=spl[3], bases=spl[4], quality=spl[5])
     else:
         pile = PileupStruct(chrom=spl[0], position=spl[1], ref=spl[2], coverage=spl[3], bases=0, quality=0)
     return pile;
 
-#function for picking ALT base (quality not included in calculations)
+#Function for picking ALT base using string of bases and ref. genome
+#Quality of the base string will be added in later versions
 def alt_pick(base):
-    #regex for finding ..A.A...A..A.AAAC.C.,,. strings
+    #Regex for finding bases which are consi
     prog = re.compile(r'(\.*[ATCGNatcgn]+\.*)+')
     result = prog.match(base)
     if result is None:
         return None
 
-    #Counter is counting nuber of occurances of every character in string
+    #Counter is dict subclass for counting the number of occurances of every character in string
     x = Counter(result.group())
-    #most common character is chosen (quality will be added in calculations)
 
-    #case when there is same number of different bases (ie. AAAACCCCG..)
+    #Case when there is same number of different bases (ie. AAAACCCC)
     newdict = {}
     for k,v in x.iteritems():
         newdict.setdefault(v, []).append(k)
     for k,v in newdict.iteritems():
         if len(v)==2:
-            #print v
             if v[1]!='.':
-                return v #1/2
+                return v #Genotype 1/2
             else:
-                return v[0] #1/1
+                return v[0] #Genotype 1/1
 
     if (x.most_common(1)[0][0] != '.'):
-        return x.most_common(1)[0][0]; #0/1
+        return x.most_common(1)[0][0]; #Genotype 0/1
 
-
-#function for determining quality based on quality string passed of bases and ALT chosen
+#Function for determining quality of chosen ALT based on quality string provided
 def quality(base, qual, alt):
     positions = [m.start() for m in re.finditer(str(alt), base.replace(",",".").upper())]
     num_of_chosen = 1
@@ -55,8 +52,7 @@ def quality(base, qual, alt):
             s += ord(qual[n]) #ord(c) returns ASCII value of 'c'
         return round(s*1.0/num_of_chosen, 5);
 
-#------------------------------- main program ---------------------------------
-#number of arguments checking
+#------------------------------- Main program ---------------------------------
 if len(sys.argv) == 1:
     print "Error: Usage: ./humbly.py file_name.pileup"
     exit()
@@ -65,18 +61,22 @@ if sys.argv[1][-6:] != "pileup":
     print "Error: Please provide PILEUP file format"
     exit()
 
-#opening file and iterating line by line
 with open(sys.argv[1]) as f:
     lines = f.readlines()
 
-#vcf output - list of strings
+#Variable for printing VCF file
 vcf = []
 vcf = "#CHROM\tPOS\tID\tREF\tALT\tQUAL"
 
+#C-like Typedef struct PiledupStruct
+PileupStruct = namedtuple("PileupStruct", "chrom position ref coverage bases quality")
+
 for iter in lines:
     piled_up = str_to_pileup_struct(iter)
-    #ignoring DNA direction (every ',' is '.' and 'a' is 'A' etc.)
+
+    #Ignoring DNA direction (every ',' is '.', 'a' is 'A' etc.)
     alt = alt_pick(str(piled_up.bases).replace(",",".").upper())
+    
     q = quality(str(piled_up.bases),str(piled_up.quality), alt)
 
     if alt != None:
@@ -86,5 +86,5 @@ for iter in lines:
         vcf += "\t"+str(piled_up.ref)
         vcf += "\t"+str(alt)
         vcf += "\t"+str(q)
-        #print "Quality:"+str(q)+" Bases:"+str(piled_up.bases.replace(",",".").upper())+" ALT:"+str(alt)
+
 print vcf
