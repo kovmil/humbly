@@ -10,3 +10,4 @@ Intervals on which to perform variant calling (BED file)
 Filters used for VC tresholding
 
 Testing git
+Testing branching
