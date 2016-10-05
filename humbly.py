@@ -15,7 +15,7 @@ def str_to_pileup_struct(str):
         pile = PileupStruct(chrom=spl[0], position=spl[1], ref=spl[2], coverage=spl[3], bases=0, quality=0)
     return pile;
 
-#function for picking ALT base (quality not included in calculations)
+#function for picking ALT base (quality is not included in calculations)
 def alt_pick(base):
     #regex for finding ..A.A...A..A.AAAC.C.,,. strings
     prog = re.compile(r'(\.*,*[ATCGNatcgn]+\.*,*)+')
