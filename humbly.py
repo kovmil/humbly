@@ -12,6 +12,8 @@ from collections import namedtuple
 SIGNIFICANT_PERCENTAGE_OF_BASES = (0.25)
 MAJOR_PERCENTAGE_OF_BASES = (0.75)
 
+vcf = ""
+
 #------------------------------- Functions ------------------------------------
 #Function for parsing string (line from .pileup file) into PileupStruct structure
 def str_to_pileup_struct(str):
@@ -34,6 +36,19 @@ def quality(base, qual, alt):
             s += ord(qual[n]) #ord(c) returns ASCII value of 'c'
         return round(s*1.0/num_of_chosen, 2);
 
+def header():
+    global vcf
+    vcf += "##fileformat=VCFv4.2\n"
+    vcf += "##FILTER=<ID=PASS, Description=\"All filters passed\">\n"
+    vcf += "##ALT=<ID=*,Description=\"Represents allele(s) other than observed.\">\n"
+    vcf += "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n"
+    vcf += "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"List of Phred-scaled genotype likelihoods\">\n"
+    vcf += "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
+
+
+
+    vcf += "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tGENOTYPE\t" + str(sys.argv[1]).replace(".pileup", ".bam")
+
 #------------------------------- Main program ---------------------------------
 if len(sys.argv) == 1:
     print "Error: Usage: ./humbly.py file_name.pileup"
@@ -43,17 +58,20 @@ if sys.argv[1][-6:] != "pileup":
     print "Error: Please provide PILEUP file format"
     exit()
 
-with open(sys.argv[1]) as f:
-    lines = f.readlines()
+with open(sys.argv[1]) as pileup_file:
+    lines = pileup_file.readlines()
 
 #Variable for printing VCF file
-vcf = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tGENOTYPE"
+header()
+
 
 #C-like Typedef struct PiledupStruct
 PileupStruct = namedtuple("PileupStruct", "chrom position ref coverage bases quality")
 
 reg_exp = re.compile(r'(\.*((\+|-)[0-9]+[ATCGN]+)*[ATCGN.]+\.*)+')
 indel_exp = re.compile(r'(\.*[\^$]*((\+|-)[0-9]+[ATCGN]+)*[ATCGN.]+\.*)+')
+
+
 
 for iter in lines:
     piled_up = str_to_pileup_struct(iter)
@@ -69,8 +87,8 @@ for iter in lines:
 
         #Counter is dict subclass for counting the number of occurances of every character in string
         base_count = Counter(str(match_found.group()))
-        if base_count['+'] > 0 or base_count['-'] > 0:
-            print indel_match.group()
+        #if base_count['+'] > 0 or base_count['-'] > 0:
+            #print indel_match.group()
 
         mc_list = base_count.most_common(2)
         base_len = len(str(match_found.group()))
