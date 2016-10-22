@@ -164,7 +164,7 @@ for iter in lines:
         indel_flag = None
 
         if arguments['--known']:
-            known_snp = open(arguments['--known'])
+            known_snp = open(str(arguments['--known'][0]))
             known_snp_read = mmap.mmap(known_snp.fileno(), 0, access=mmap.ACCESS_READ)
             if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
                 q = q * KNOWN_CONST
@@ -172,7 +172,7 @@ for iter in lines:
             if alt == 'Y':
                 indel_flag = "INDEL"
                 alt = indel[:-1]
-                known_indels = open(arguments['--known'])
+                known_indels = open(str(arguments['--known'][0]))
                 known_indel_read = mmap.mmap(known_indels.fileno(), 0, access=mmap.ACCESS_READ)
                 if known_indel_read.find("\t"+str(piled_up.position)+"\t") != -1:
                     q = q * KNOWN_CONST
@@ -205,6 +205,10 @@ for iter in lines:
         vcf += "  GT:PL"
         vcf += "  "+str(genotype)
 
-print vcf
+#Printing the output VCF
+output_file = open('output.vcf', 'w')
+output_file.write(vcf)
+output_file.close()
+
 #TODO: Add VCF header according to VCF 4.2 standard
 #TODO: Add INFO, FORMAT and SAMPLE column and its tags (values) according to 4.2 standard
