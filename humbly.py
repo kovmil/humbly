@@ -5,7 +5,7 @@
 # Author: Milan Kovacevic, kovmil@gmail.com
 #------------------------------------------------------------------------------
 """
-Usage: humbly.py [-h] [--ctl=thr] [--clh=thr] [--known=vcf]... [--kvs=known_variants_significance] PILEUP_FILE
+Usage: humbly.py [-h] [--ctl=thr] [--cth=thr] [--known=vcf]... [--kvs=known_variants_significance] PILEUP_FILE
 
 Options:
     -h --help
@@ -20,9 +20,6 @@ import re
 import mmap
 from collections import Counter
 from collections import namedtuple
-
-SIGNIFICANT_PERCENTAGE_OF_BASES = (0.25)
-MAJOR_PERCENTAGE_OF_BASES = (0.75)
 
 FILTER_QUALITY = 50
 FILTER_COVERAGE = 5
@@ -70,8 +67,14 @@ def header():
 
 
 arguments = docopt(__doc__)
-print(arguments)
-#exit()
+#print(arguments)
+
+if arguments['--cth'] == None:
+    CALLING_TRESHOLD_LOW = (0.25)
+    CALLING_TRESHOLD_HIGH = (0.75)
+else:
+    CALLING_TRESHOLD_LOW = int(arguments['--ctl'])
+    CALLING_TRESHOLD_HIGH = int(arguments['--cth'])
 
 with open(arguments['PILEUP_FILE']) as pileup_file:
     lines = pileup_file.readlines()
@@ -158,19 +161,21 @@ for iter in lines:
     if genotype != "0/0":
         q = quality(Y_instead_indel.replace("$","").replace("^","") ,str(piled_up.quality), alt)
 
-        known_snp = open('example_human_known_snp.vcf')
-        known_snp_read = mmap.mmap(known_snp.fileno(), 0, access=mmap.ACCESS_READ)
-        if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
-            q = q * KNOWN_CONST
-
         indel_flag = None
-        if alt == 'Y':
-            indel_flag = "INDEL"
-            alt = indel[:-1]
-            known_indels = open('example_human_known_indels.vcf')
-            known_indel_read = mmap.mmap(known_indels.fileno(), 0, access=mmap.ACCESS_READ)
-            if known_indel_read.find("\t"+str(piled_up.position)+"\t") != -1:
+
+        if arguments['--known']:
+            known_snp = open(arguments['--known'])
+            known_snp_read = mmap.mmap(known_snp.fileno(), 0, access=mmap.ACCESS_READ)
+            if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
                 q = q * KNOWN_CONST
+
+            if alt == 'Y':
+                indel_flag = "INDEL"
+                alt = indel[:-1]
+                known_indels = open(arguments['--known'])
+                known_indel_read = mmap.mmap(known_indels.fileno(), 0, access=mmap.ACCESS_READ)
+                if known_indel_read.find("\t"+str(piled_up.position)+"\t") != -1:
+                    q = q * KNOWN_CONST
 
         #Printing VCF rows after header
         #Chrom
