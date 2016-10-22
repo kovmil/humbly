@@ -4,6 +4,17 @@
 # Created: 06.10.2016
 # Author: Milan Kovacevic, kovmil@gmail.com
 #------------------------------------------------------------------------------
+"""
+Usage: humbly.py [-h] [--ctl=thr] [--clh=thr] [--known=vcf]... [--kvs=known_variants_significance] PILEUP_FILE
+
+Options:
+    -h --help
+    --known Known variants file in uncompressed VCF format.
+    --kvs Known variants significance constant [default: 1.2].
+    --ctl Calling treshold low [default: 0.25]
+    --cth Calling treshold high [default: 0.75]
+"""
+from docopt import docopt
 import sys
 import re
 import mmap
@@ -56,15 +67,13 @@ def header():
     vcf += "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + str(sys.argv[1]).replace(".pileup", ".bam")
 
 #------------------------------- Main program ---------------------------------
-if len(sys.argv) == 1:
-    print "Error: Usage: ./humbly.py file_name.pileup"
-    exit()
 
-if sys.argv[1][-6:] != "pileup":
-    print "Error: Please provide PILEUP file format"
-    exit()
 
-with open(sys.argv[1]) as pileup_file:
+arguments = docopt(__doc__)
+print(arguments)
+#exit()
+
+with open(arguments['PILEUP_FILE']) as pileup_file:
     lines = pileup_file.readlines()
 
 #Variable for printing VCF file
@@ -80,6 +89,7 @@ for iter in lines:
 
     mq_pos = str(piled_up.bases).find('^')
     if mq_pos >= 0:
+        #ASCII value of next charachter - 33
         mapping_quality = ord(piled_up.bases[mq_pos+1]) - 33
 
     alt = None
@@ -145,7 +155,6 @@ for iter in lines:
                     alt = [alt, smc]
                     genotype = "1/2"
 
-
     if genotype != "0/0":
         q = quality(Y_instead_indel.replace("$","").replace("^","") ,str(piled_up.quality), alt)
 
@@ -163,6 +172,7 @@ for iter in lines:
             if known_indel_read.find("\t"+str(piled_up.position)+"\t") != -1:
                 q = q * KNOWN_CONST
 
+        #Printing VCF rows after header
         #Chrom
         vcf += "\n"+str(piled_up.chrom)
         #Position
@@ -187,6 +197,7 @@ for iter in lines:
         vcf += "DP="+str(piled_up.coverage)+";"
         vcf += "MQ="+str(mapping_quality)+";"
         #Format
+        vcf += "  GT:PL"
         vcf += "  "+str(genotype)
 
 print vcf
