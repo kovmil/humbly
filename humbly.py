@@ -42,14 +42,17 @@ def str_to_pileup_struct(str):
 def quality(base, qual, alt):
     if len(alt) > 1:
         alt = alt[0]
-    positions = [m.start() for m in re.finditer(str(alt), base)]
-    num_of_chosen = 1
-    if len(positions) > 0:
-        num_of_chosen = len(positions)
-        s = 0
-        for n in positions:
-            s += ord(qual[n]) #ord(c) returns ASCII value of 'c'
-        return round(s*1.0/num_of_chosen, 2);
+    if len(base) == len(qual):
+        positions = [m.start() for m in re.finditer(str(alt), base)]
+        num_of_chosen = 1
+        if len(positions) > 0:
+            num_of_chosen = len(positions)
+            s = 0
+            for n in positions:
+                s += ord(qual[n]) #ord(c) returns ASCII value of 'c'
+            return round(s*1.0/num_of_chosen, 2)
+    else:
+        return 0
 
 def header():
     global vcf
@@ -163,7 +166,7 @@ for iter in lines:
 
         indel_flag = None
 
-        if arguments['--known']:
+        if arguments['--known'] != []:
             known_snp = open(str(arguments['--known'][0]))
             known_snp_read = mmap.mmap(known_snp.fileno(), 0, access=mmap.ACCESS_READ)
             if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
@@ -176,6 +179,10 @@ for iter in lines:
                 known_indel_read = mmap.mmap(known_indels.fileno(), 0, access=mmap.ACCESS_READ)
                 if known_indel_read.find("\t"+str(piled_up.position)+"\t") != -1:
                     q = q * KNOWN_CONST
+
+        if alt == 'Y':
+            indel_flag = "INDEL"
+            alt = indel[:-1]
 
         #Printing VCF rows after header
         #Chrom
@@ -210,5 +217,9 @@ output_file = open('output.vcf', 'w')
 output_file.write(vcf)
 output_file.close()
 
+#DEBUG MODE
+#print vcf
+
 #TODO: Add VCF header according to VCF 4.2 standard
 #TODO: Add INFO, FORMAT and SAMPLE column and its tags (values) according to 4.2 standard
+#TODO: Character after '^' handling
