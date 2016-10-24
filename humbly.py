@@ -24,6 +24,7 @@ from collections import namedtuple
 FILTER_QUALITY = 50
 FILTER_COVERAGE = 5
 KNOWN_CONST = 1.2
+CALLING_TRESHOLD_HIGH = (0.75)
 
 vcf = ""
 
@@ -64,34 +65,36 @@ def header():
     vcf += "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"List of Phred-scaled genotype likelihoods\">\n"
     vcf += "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"
 
-    vcf += "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + str(sys.argv[1]).replace(".pileup", ".bam")
+    vcf += "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" + str(arguments['PILEUP_FILE']).replace(".pileup", ".bam")
 
 #------------------------------- Main program ---------------------------------
-
 
 arguments = docopt(__doc__)
 #print(arguments)
 
 if arguments['--cth'] == None:
+    call_thr_high = CALLING_TRESHOLD_HIGH
+else:
+    call_thr_high = int(arguments['--cth'])
+if arguments['--ctl'] == None:
     CALLING_TRESHOLD_LOW = (0.25)
-    CALLING_TRESHOLD_HIGH = (0.75)
 else:
     CALLING_TRESHOLD_LOW = int(arguments['--ctl'])
-    CALLING_TRESHOLD_HIGH = int(arguments['--cth'])
 
 with open(arguments['PILEUP_FILE']) as pileup_file:
     lines = pileup_file.readlines()
 
-#Variable for printing VCF file
+#Function for creating VCF header
 header()
 
-#C-like Typedef struct PiledupStruct
+# C-like Typedef struct PiledupStruct
 PileupStruct = namedtuple("PileupStruct", "chrom position ref coverage bases quality")
 
+# Compile regular expression for finding nucleotides in pileup
 reg_exp = re.compile(r'([\.\^\$]*((\+|-)[0-9]+[ATCGN]+)*[ATCGN]+[\.\^\$]*)+')
 
 for iter in lines:
-    piled_up = str_to_pileup_struct(iter)
+    piled_up = str_to_pileup_struct(iter) # Pileup line to structure
 
     mq_pos = str(piled_up.bases).find('^')
     if mq_pos >= 0:
@@ -108,6 +111,7 @@ for iter in lines:
     if match_found != None:
         base_len = len(str(match_found.group()))
 
+        # Prepare for detecting indels
         if  match_found.group().find('+') >= 0 or match_found.group().find('-') >= 0:
             if(match_found.group()[-1]!='.'):
                 match = str(match_found.group())+"."
@@ -130,7 +134,7 @@ for iter in lines:
             base_count = Counter(str(match_found.group()).replace("$","").replace("^",""))
             Y_instead_indel = str(piled_up.bases)
 
-
+        # Finding most common and second most common variants in the pileup
         mc_list = base_count.most_common(2)
 
         mc = mc_list[0][0]
@@ -162,7 +166,7 @@ for iter in lines:
                     genotype = "1/2"
 
     if genotype != "0/0":
-        q = quality(Y_instead_indel.replace("$","").replace("^","") ,str(piled_up.quality), alt)
+        variant_quality = quality(Y_instead_indel.replace("$","").replace("^","") ,str(piled_up.quality), alt)
 
         indel_flag = None
 
@@ -170,7 +174,7 @@ for iter in lines:
             known_snp = open(str(arguments['--known'][0]))
             known_snp_read = mmap.mmap(known_snp.fileno(), 0, access=mmap.ACCESS_READ)
             if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
-                q = q * KNOWN_CONST
+                variant_quality = variant_quality * KNOWN_CONST
 
             if alt == 'Y':
                 indel_flag = "INDEL"
@@ -178,7 +182,7 @@ for iter in lines:
                 known_indels = open(str(arguments['--known'][0]))
                 known_indel_read = mmap.mmap(known_indels.fileno(), 0, access=mmap.ACCESS_READ)
                 if known_indel_read.find("\t"+str(piled_up.position)+"\t") != -1:
-                    q = q * KNOWN_CONST
+                    variant_quality = variant_quality * KNOWN_CONST
 
         if alt == 'Y':
             indel_flag = "INDEL"
@@ -188,29 +192,32 @@ for iter in lines:
         #Chrom
         vcf += "\n"+str(piled_up.chrom)
         #Position
-        vcf += "  "+str(piled_up.position)
+        vcf += "\t"+str(piled_up.position)
         #ID
-        vcf += "  "+str(".")
+        vcf += "\t"+str(".")
         #Reference
-        vcf += "  "+str(piled_up.ref)
+        vcf += "\t"+str(piled_up.ref)
         #Alt
-        vcf += "  "+str(alt)
-        #Quality
-        vcf += "  "+str(q)
-        #Filter
-        if q > FILTER_QUALITY and int(piled_up.coverage) >= FILTER_COVERAGE:
-            vcf += "  "+str("PASS")
+        if genotype == "1/2":
+            vcf += "\t"+str(alt[0])+","+str(alt[1])
         else:
-            vcf += "  "+str(".")
+            vcf += "\t"+str(alt)
+        #Quality
+        vcf += "\t"+str(variant_quality)
+        #Filter
+        if variant_quality > FILTER_QUALITY and int(piled_up.coverage) >= FILTER_COVERAGE:
+            vcf += "\t"+str("PASS")
+        else:
+            vcf += "\t"+str(".")
         #Info
-        vcf += "  "
+        vcf += "\t"
         if indel_flag != None:
             vcf += "INDEL;"
         vcf += "DP="+str(piled_up.coverage)+";"
         vcf += "MQ="+str(mapping_quality)+";"
         #Format
-        vcf += "  GT:PL"
-        vcf += "  "+str(genotype)
+        vcf += "\tGT:PL"
+        vcf += "\t"+str(genotype)
 
 #Printing the output VCF
 output_file = open('output.vcf', 'w')
@@ -221,5 +228,10 @@ output_file.close()
 #print vcf
 
 #TODO: Add VCF header according to VCF 4.2 standard
+#TODO: Include quality into variant/genotype decisioning
 #TODO: Add INFO, FORMAT and SAMPLE column and its tags (values) according to 4.2 standard
 #TODO: Character after '^' handling
+#TODO: Add all parameters in docopt
+#TODO: Read known variants outside of the for loop
+#TODO: One variants file for SNPs and indels
+#TODO: INDEL printing format in VCF
