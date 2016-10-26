@@ -5,7 +5,7 @@
 # Author: Milan Kovacevic, kovmil@gmail.com
 #------------------------------------------------------------------------------
 """
-Usage: humbly.py [-h] [--ctl=thr] [--cth=thr] [--known=vcf]... [--kvs=known_variants_significance] PILEUP_FILE
+Usage: humbly.py [-h] [--ctl=thr] [--cth=thr] [--fq==filter_qual] [--fc==filer_coverage] [--known=vcf]... [--kvs=known_variants_significance] PILEUP_FILE
 
 Options:
     -h --help
@@ -13,6 +13,8 @@ Options:
     --kvs Known variants significance constant [default: 1.2].
     --ctl Calling treshold low [default: 0.25]
     --cth Calling treshold high [default: 0.75]
+    --fq Filter quality [default: 50]
+    --fc Filter coverage [default: 5]
 """
 from docopt import docopt
 import sys
@@ -24,7 +26,8 @@ from collections import namedtuple
 FILTER_QUALITY = 50
 FILTER_COVERAGE = 5
 KNOWN_CONST = 1.2
-CALLING_TRESHOLD_HIGH = (0.75)
+CALLING_TRESHOLD_HIGH = 0.75
+CALLING_TRESHOLD_LOW = 0.25
 
 vcf = ""
 
@@ -43,6 +46,8 @@ def str_to_pileup_struct(str):
 def quality(base, qual, alt):
     if len(alt) > 1:
         alt = alt[0]
+    if abs(len(base) - len(qual)) == 1:
+        base = base[:-1]
     if len(base) == len(qual):
         positions = [m.start() for m in re.finditer(str(alt), base)]
         num_of_chosen = 1
@@ -77,9 +82,19 @@ if arguments['--cth'] == None:
 else:
     call_thr_high = int(arguments['--cth'])
 if arguments['--ctl'] == None:
-    CALLING_TRESHOLD_LOW = (0.25)
+    call_thr_low = CALLING_TRESHOLD_LOW
 else:
     CALLING_TRESHOLD_LOW = int(arguments['--ctl'])
+
+if arguments['--fq'] == None:
+    filter_qual = FILTER_QUALITY
+else:
+    filter_qual = int(arguments['--fq'])
+
+if arguments['--fc'] == None:
+    filter_cov = FILTER_COVERAGE
+else:
+    filter_cov = int(arguments['--fc'])
 
 with open(arguments['PILEUP_FILE']) as pileup_file:
     lines = pileup_file.readlines()
@@ -92,6 +107,10 @@ PileupStruct = namedtuple("PileupStruct", "chrom position ref coverage bases qua
 
 # Compile regular expression for finding nucleotides in pileup
 reg_exp = re.compile(r'([\.\^\$]*((\+|-)[0-9]+[ATCGN]+)*[ATCGN]+[\.\^\$]*)+')
+
+if arguments['--known'] != []:
+    known_snp = open(str(arguments['--known'][0]))
+    known_snp_read = mmap.mmap(known_snp.fileno(), 0, access=mmap.ACCESS_READ)
 
 for iter in lines:
     piled_up = str_to_pileup_struct(iter) # Pileup line to structure
@@ -148,7 +167,7 @@ for iter in lines:
             smc_cnt = 0
 
         if mc == '.':
-            if smc_cnt > base_len/4:
+            if smc_cnt > base_len * call_thr_low:
                 alt = smc
                 genotype = "0/1"
             else:
@@ -156,9 +175,9 @@ for iter in lines:
                 genotype = "0/0"
         else:
             alt = mc
-            if mc_cnt > 3*base_len/4:
+            if mc_cnt > base_len * call_thr_high:
                 genotype = "1/1"
-            elif smc_cnt > base_len/4:
+            elif smc_cnt > base_len * call_thr_low:
                 if smc == '.':
                     genotype = "0/1"
                 else:
@@ -166,27 +185,23 @@ for iter in lines:
                     genotype = "1/2"
 
     if genotype != "0/0":
-        variant_quality = quality(Y_instead_indel.replace("$","").replace("^","") ,str(piled_up.quality), alt)
+        variant_quality = quality(Y_instead_indel.replace("$","").replace("^","").replace("]", "").replace("!", "").replace("I", "") ,str(piled_up.quality), alt)
 
         indel_flag = None
 
         if arguments['--known'] != []:
-            known_snp = open(str(arguments['--known'][0]))
-            known_snp_read = mmap.mmap(known_snp.fileno(), 0, access=mmap.ACCESS_READ)
             if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
                 variant_quality = variant_quality * KNOWN_CONST
 
-            if alt == 'Y':
-                indel_flag = "INDEL"
-                alt = indel[:-1]
-                known_indels = open(str(arguments['--known'][0]))
-                known_indel_read = mmap.mmap(known_indels.fileno(), 0, access=mmap.ACCESS_READ)
-                if known_indel_read.find("\t"+str(piled_up.position)+"\t") != -1:
-                    variant_quality = variant_quality * KNOWN_CONST
 
+        reference = piled_up.ref
         if alt == 'Y':
             indel_flag = "INDEL"
-            alt = indel[:-1]
+            if indel[0] == '+':
+                alt = reference + indel[2:-1]
+            else:
+                alt = reference
+                reference = reference + indel[2:-1]
 
         #Printing VCF rows after header
         #Chrom
@@ -196,7 +211,7 @@ for iter in lines:
         #ID
         vcf += "\t"+str(".")
         #Reference
-        vcf += "\t"+str(piled_up.ref)
+        vcf += "\t"+str(reference)
         #Alt
         if genotype == "1/2":
             vcf += "\t"+str(alt[0])+","+str(alt[1])
@@ -205,7 +220,7 @@ for iter in lines:
         #Quality
         vcf += "\t"+str(variant_quality)
         #Filter
-        if variant_quality > FILTER_QUALITY and int(piled_up.coverage) >= FILTER_COVERAGE:
+        if variant_quality > filter_qual and int(piled_up.coverage) >= filter_cov:
             vcf += "\t"+str("PASS")
         else:
             vcf += "\t"+str(".")
@@ -216,7 +231,7 @@ for iter in lines:
         vcf += "DP="+str(piled_up.coverage)+";"
         vcf += "MQ="+str(mapping_quality)+";"
         #Format
-        vcf += "\tGT:PL"
+        vcf += "\tGT"
         vcf += "\t"+str(genotype)
 
 #Printing the output VCF
@@ -227,11 +242,5 @@ output_file.close()
 #DEBUG MODE
 #print vcf
 
-#TODO: Add VCF header according to VCF 4.2 standard
 #TODO: Include quality into variant/genotype decisioning
 #TODO: Add INFO, FORMAT and SAMPLE column and its tags (values) according to 4.2 standard
-#TODO: Character after '^' handling
-#TODO: Add all parameters in docopt
-#TODO: Read known variants outside of the for loop
-#TODO: One variants file for SNPs and indels
-#TODO: INDEL printing format in VCF
