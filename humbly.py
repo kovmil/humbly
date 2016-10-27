@@ -218,6 +218,8 @@ for iter in lines:
         else:
             vcf += "\t"+str(alt)
         #Quality
+        if variant_quality == None:
+            variant_quality = 0
         vcf += "\t"+str(variant_quality)
         #Filter
         if variant_quality > filter_qual and int(piled_up.coverage) >= filter_cov:
