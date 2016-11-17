@@ -166,13 +166,25 @@ for iter in lines:
             smc = None
             smc_cnt = 0
 
+        known_found = -1
+        posit = str(piled_up.position)
+        # print posit
+        # print smc
+        if arguments['--known'] != []:
+            known_found = known_snp_read.find("\t"+posit+"\t")
+
+
         if mc == '.':
             if smc_cnt > base_len * call_thr_low:
                 alt = smc
                 genotype = "0/1"
             else:
-                alt = piled_up.ref
-                genotype = "0/0"
+                if known_found != -1 and smc_cnt>base_len * 0.2:
+                    alt = smc
+                    genotype = "0/1"
+                else:
+                    alt = piled_up.ref
+                    genotype = "0/0"
         else:
             alt = mc
             if mc_cnt > base_len * call_thr_high:
@@ -189,9 +201,9 @@ for iter in lines:
 
         indel_flag = None
 
-        if arguments['--known'] != []:
-            if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
-                variant_quality = variant_quality * KNOWN_CONST
+        # if arguments['--known'] != []:
+        #     if known_snp_read.find("\t"+str(piled_up.position)+"\t") != -1:
+        #         variant_quality = variant_quality * KNOWN_CONST
 
 
         reference = piled_up.ref
@@ -246,3 +258,4 @@ output_file.close()
 
 #TODO: Include quality into variant/genotype decisioning
 #TODO: Add INFO, FORMAT and SAMPLE column and its tags (values) according to 4.2 standard
+#TODO: output file name
