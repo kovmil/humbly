@@ -26,8 +26,8 @@ from collections import namedtuple
 FILTER_QUALITY = 50
 FILTER_COVERAGE = 5
 KNOWN_CONST = 1.2
-CALLING_TRESHOLD_HIGH = 0.9
-CALLING_TRESHOLD_LOW = 0.1
+CALLING_TRESHOLD_HIGH = 0.75
+CALLING_TRESHOLD_LOW = 0.25
 
 vcf = ""
 
@@ -135,7 +135,9 @@ for iter in lines:
         base_len = len(str(match_found.group()))
 
         # Prepare for detecting indels
+        indel_flag = None
         if  match_found.group().find('+') >= 0 or match_found.group().find('-') >= 0:
+            indel_flag = "INDEL"
             if(match_found.group()[-1]!='.'):
                 match = str(match_found.group())+"."
             else:
@@ -156,6 +158,7 @@ for iter in lines:
             Y_instead_indel = match.replace(indel, "Y")
 
             while Y_instead_indel.find('+')>=0 or Y_instead_indel.find('-')>=0:
+                indel_flag = None
                 if Y_instead_indel.find('+')>=0:
                     first_plus_pos = Y_instead_indel.find('+')
                     num_of_indels = int(Y_instead_indel[first_plus_pos+1])
@@ -168,9 +171,6 @@ for iter in lines:
                     Y_instead_indel = Y_instead_indel.replace(indel, "Z")
 
             base_len = len(Y_instead_indel)
-            # print "-----------------------"
-            # print piled_up.position
-            # print Y_instead_indel
 
             base_count =  Counter(Y_instead_indel.replace("$","").replace("^",""))
         else:
@@ -199,7 +199,7 @@ for iter in lines:
 
 
         if mc == '.':
-            if smc_cnt > base_len * call_thr_low:
+            if smc_cnt > base_len * call_thr_low and smc_cnt>1:
                 alt = smc
                 genotype = "0/1"
             else:
