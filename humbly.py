@@ -26,8 +26,8 @@ from collections import namedtuple
 FILTER_QUALITY = 50
 FILTER_COVERAGE = 5
 KNOWN_CONST = 1.2
-CALLING_TRESHOLD_HIGH = 0.75
-CALLING_TRESHOLD_LOW = 0.25
+CALLING_TRESHOLD_HIGH = 0.8
+CALLING_TRESHOLD_LOW = 0.2
 
 vcf = ""
 
@@ -110,7 +110,8 @@ header()
 PileupStruct = namedtuple("PileupStruct", "chrom position ref coverage bases quality")
 
 # Compile regular expression for finding nucleotides in pileup
-reg_exp = re.compile(r'([\.\^\$]*((\+|\-)[0-9]+[ATCGN]+[\.\^\$]*)|[ATCGN]+[\.\^\$]*)+')
+reg_exp = re.compile(r'.*[ATCGN]+.*')
+
 
 if arguments['--known'] != []:
     known_snp = open(str(arguments['--known'][0]))
@@ -118,6 +119,7 @@ if arguments['--known'] != []:
 
 for iter in lines:
     piled_up = str_to_pileup_struct(iter) # Pileup line to structure
+
 
     mq_pos = str(piled_up.bases).find('^')
     if mq_pos >= 0:
@@ -129,7 +131,7 @@ for iter in lines:
     Y_instead_indel = None
 
     #Regex for finding bases which are considered
-    match_found = reg_exp.match(str(piled_up.bases))
+    match_found = reg_exp.match((str(piled_up.bases).replace("$","").replace("^","")))
 
     if match_found != None:
         base_len = len(str(match_found.group()))
@@ -143,32 +145,33 @@ for iter in lines:
             else:
                 match = str(match_found.group())
 
-            if match.find('+') >= 0:
+            if match.find('+') >= 0 and piled_up.bases[piled_up.bases.find('+')+1].isdigit():
                 first_plus_pos = match.find('+')
                 num_of_indels = int(match[first_plus_pos+1])
                 indel = match[first_plus_pos:first_plus_pos+num_of_indels+3]
-            elif match.find('-') >= 0:
+            elif match.find('-') >= 0 and piled_up.bases[piled_up.bases.find('-')+1].isdigit():
                 first_minus_pos = match.find('-')
                 num_of_indels = int(match[first_minus_pos+1])
                 indel = match[first_minus_pos:first_minus_pos+num_of_indels+3]
-                # print match
-                # print "____________________"
-
+            else:
+                Y_instead_indel = match.replace("+","").replace("-","")
 
             Y_instead_indel = match.replace(indel, "Y")
 
             while Y_instead_indel.find('+')>=0 or Y_instead_indel.find('-')>=0:
                 indel_flag = None
-                if Y_instead_indel.find('+')>=0:
+                if Y_instead_indel.find('+')>=0 and piled_up.bases[piled_up.bases.find('+')+1].isdigit():
                     first_plus_pos = Y_instead_indel.find('+')
                     num_of_indels = int(Y_instead_indel[first_plus_pos+1])
                     indel = Y_instead_indel[first_plus_pos:first_plus_pos+num_of_indels+3]
                     Y_instead_indel = Y_instead_indel.replace(indel, "Z")
-                elif Y_instead_indel.find('-') >= 0:
+                elif Y_instead_indel.find('-') >= 0 and piled_up.bases[piled_up.bases.find('-')+1].isdigit():
                     first_minus_pos = Y_instead_indel.find('-')
                     num_of_indels = int(Y_instead_indel[first_minus_pos+1])
                     indel = Y_instead_indel[first_minus_pos:first_minus_pos+num_of_indels+3]
                     Y_instead_indel = Y_instead_indel.replace(indel, "Z")
+                else:
+                    Y_instead_indel = match.replace("+","").replace("-","")
 
             base_len = len(Y_instead_indel)
 
