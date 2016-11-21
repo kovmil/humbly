@@ -26,8 +26,8 @@ from collections import namedtuple
 FILTER_QUALITY = 50
 FILTER_COVERAGE = 5
 KNOWN_CONST = 1.2
-CALLING_TRESHOLD_HIGH = 0.75
-CALLING_TRESHOLD_LOW = 0.25
+CALLING_TRESHOLD_HIGH = 0.9
+CALLING_TRESHOLD_LOW = 0.1
 
 vcf = ""
 
@@ -44,6 +44,10 @@ def str_to_pileup_struct(str):
 
 #Function for determining quality of chosen ALT based on quality string provided
 def quality(base, qual, alt):
+    # print base
+    # print qual
+    # print alt
+    # print "-----------------------------"
     if len(alt) > 1:
         alt = alt[0]
     if abs(len(base) - len(qual)) == 1:
@@ -106,7 +110,7 @@ header()
 PileupStruct = namedtuple("PileupStruct", "chrom position ref coverage bases quality")
 
 # Compile regular expression for finding nucleotides in pileup
-reg_exp = re.compile(r'([\.\^\$]*((\+|-)[0-9]+[ATCGN]+)*[ATCGN]+[\.\^\$]*)+')
+reg_exp = re.compile(r'([\.\^\$]*((\+|\-)[0-9]+[ATCGN]+[\.\^\$]*)|[ATCGN]+[\.\^\$]*)+')
 
 if arguments['--known'] != []:
     known_snp = open(str(arguments['--known'][0]))
@@ -145,10 +149,30 @@ for iter in lines:
                 first_minus_pos = match.find('-')
                 num_of_indels = int(match[first_minus_pos+1])
                 indel = match[first_minus_pos:first_minus_pos+num_of_indels+3]
+                # print match
+                # print "____________________"
 
-            base_len = len(match.replace(indel, "Y"))
+
             Y_instead_indel = match.replace(indel, "Y")
-            base_count =  Counter(match.replace(indel, "Y"))
+
+            while Y_instead_indel.find('+')>=0 or Y_instead_indel.find('-')>=0:
+                if Y_instead_indel.find('+')>=0:
+                    first_plus_pos = Y_instead_indel.find('+')
+                    num_of_indels = int(Y_instead_indel[first_plus_pos+1])
+                    indel = Y_instead_indel[first_plus_pos:first_plus_pos+num_of_indels+3]
+                    Y_instead_indel = Y_instead_indel.replace(indel, "Z")
+                elif Y_instead_indel.find('-') >= 0:
+                    first_minus_pos = Y_instead_indel.find('-')
+                    num_of_indels = int(Y_instead_indel[first_minus_pos+1])
+                    indel = Y_instead_indel[first_minus_pos:first_minus_pos+num_of_indels+3]
+                    Y_instead_indel = Y_instead_indel.replace(indel, "Z")
+
+            base_len = len(Y_instead_indel)
+            # print "-----------------------"
+            # print piled_up.position
+            # print Y_instead_indel
+
+            base_count =  Counter(Y_instead_indel.replace("$","").replace("^",""))
         else:
             base_count = Counter(str(match_found.group()).replace("$","").replace("^",""))
             Y_instead_indel = str(piled_up.bases)
@@ -179,12 +203,12 @@ for iter in lines:
                 alt = smc
                 genotype = "0/1"
             else:
-                if known_found != -1 and smc_cnt>base_len * 0.2:
-                    alt = smc
-                    genotype = "0/1"
-                else:
-                    alt = piled_up.ref
-                    genotype = "0/0"
+                # if known_found != -1 and smc_cnt>base_len * 0.2:
+                #     alt = smc
+                #     genotype = "0/1"
+                # else:
+                alt = piled_up.ref
+                genotype = "0/0"
         else:
             alt = mc
             if mc_cnt > base_len * call_thr_high:
@@ -207,7 +231,7 @@ for iter in lines:
 
 
         reference = piled_up.ref
-        if alt == 'Y':
+        if alt == 'Y' or alt == 'Z':
             indel_flag = "INDEL"
             if indel[0] == '+':
                 alt = reference + indel[2:-1]
