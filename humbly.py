@@ -214,14 +214,18 @@ for iter in lines:
                 genotype = "0/0"
         else:
             alt = mc
-            if mc_cnt > base_len * call_thr_high:
+            if mc_cnt > base_len * call_thr_high and mc_cnt>1:
                 genotype = "1/1"
-            elif smc_cnt > base_len * call_thr_low:
+            elif smc_cnt > base_len * call_thr_low and mc_cnt>1:
                 if smc == '.':
                     genotype = "0/1"
                 else:
                     alt = [alt, smc]
                     genotype = "1/2"
+            else:
+                alt = piled_up.ref
+                genotype = "0/0"
+
 
     if genotype != "0/0":
         variant_quality = quality(Y_instead_indel.replace("$","").replace("^","").replace("]", "").replace("!", "").replace("I", "") ,str(piled_up.quality), alt)
