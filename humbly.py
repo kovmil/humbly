@@ -160,12 +160,15 @@ for iter in lines:
 
             while Y_instead_indel.find('+')>=0 or Y_instead_indel.find('-')>=0:
                 indel_flag = None
-                if Y_instead_indel.find('+')>=0 and piled_up.bases[piled_up.bases.find('+')+1].isdigit():
+
+                if Y_instead_indel.find('+')>=0 and Y_instead_indel[Y_instead_indel.find('+')+1].isdigit():
+                    Y_instead_indel = Y_instead_indel.replace("^+","").replace("^-","")
                     first_plus_pos = Y_instead_indel.find('+')
                     num_of_indels = int(Y_instead_indel[first_plus_pos+1])
                     indel = Y_instead_indel[first_plus_pos:first_plus_pos+num_of_indels+3]
                     Y_instead_indel = Y_instead_indel.replace(indel, "Z")
-                elif Y_instead_indel.find('-') >= 0 and piled_up.bases[piled_up.bases.find('-')+1].isdigit():
+                elif Y_instead_indel.find('-') >= 0 and Y_instead_indel[Y_instead_indel.find('-')+1].isdigit():
+                    Y_instead_indel = Y_instead_indel.replace("^+","").replace("^-","")
                     first_minus_pos = Y_instead_indel.find('-')
                     num_of_indels = int(Y_instead_indel[first_minus_pos+1])
                     indel = Y_instead_indel[first_minus_pos:first_minus_pos+num_of_indels+3]
@@ -228,7 +231,7 @@ for iter in lines:
 
 
     if genotype != "0/0":
-        variant_quality = quality(Y_instead_indel.replace("$","").replace("^","").replace("]", "").replace("!", "").replace("I", "") ,str(piled_up.quality), alt)
+        #variant_quality = quality(Y_instead_indel.replace("$","").replace("^","").replace("]", "").replace("!", "").replace("I", "") ,str(piled_up.quality), alt)
 
         indel_flag = None
 
@@ -261,8 +264,8 @@ for iter in lines:
         else:
             vcf += "\t"+str(alt)
         #Quality
-        if variant_quality == None:
-            variant_quality = 0
+        #if variant_quality == None:
+        variant_quality = 0
         vcf += "\t"+str(variant_quality)
         #Filter
         if variant_quality > filter_qual and int(piled_up.coverage) >= filter_cov:
@@ -287,6 +290,7 @@ output_file.close()
 #DEBUG MODE
 #print vcf
 
+#TODO: Quality function FIX!
 #TODO: Include quality into variant/genotype decisioning
 #TODO: Add INFO, FORMAT and SAMPLE column and its tags (values) according to 4.2 standard
 #TODO: output file name
