@@ -66,7 +66,7 @@ def quality(base, qual, alt):
 
 def header():
     global vcf
-    vcf += "##fileformat=VCFv4.2\n"
+    vcf += "##fileformat=VCFv4.1\n"
     vcf += "##FILTER=<ID=PASS, Description=\"All filters passed\">\n"
     vcf += "##ALT=<ID=*,Description=\"Represents allele(s) other than observed.\">\n"
     vcf += "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">\n"
@@ -149,14 +149,16 @@ for iter in lines:
                 first_plus_pos = match.find('+')
                 num_of_indels = int(match[first_plus_pos+1])
                 indel = match[first_plus_pos:first_plus_pos+num_of_indels+3]
+                Y_instead_indel = match.replace(indel, "Y")
             elif match.find('-') >= 0 and piled_up.bases[piled_up.bases.find('-')+1].isdigit():
                 first_minus_pos = match.find('-')
                 num_of_indels = int(match[first_minus_pos+1])
                 indel = match[first_minus_pos:first_minus_pos+num_of_indels+3]
+                Y_instead_indel = match.replace(indel, "Y")
             else:
                 Y_instead_indel = match.replace("+","").replace("-","")
 
-            Y_instead_indel = match.replace(indel, "Y")
+
 
             while Y_instead_indel.find('+')>=0 or Y_instead_indel.find('-')>=0:
                 indel_flag = None
@@ -203,34 +205,47 @@ for iter in lines:
         if arguments['--known'] != []:
             known_found = known_snp_read.find("\t"+posit+"\t")
 
+        if mc == 'A' or mc == 'T' or mc == 'C' or mc == 'G' or mc == 'Y' or mc == 'Z' or mc == '.':
+            if smc == 'A' or smc == 'T' or smc == 'C' or smc == 'G' or smc == 'Y' or smc == 'Z' or smc == '.':
+                if mc == '.':
+                    if smc_cnt > base_len * call_thr_low and smc_cnt>1:
+                        alt = smc
+                        genotype = "0/1"
+                    else:
+                        # if known_found != -1 and smc_cnt>base_len * 0.2:
+                        #     alt = smc
+                        #     genotype = "0/1"
+                        # else:
+                        alt = piled_up.ref
+                        genotype = "0/0"
+                else:
+                    alt = mc
+                    if mc_cnt > base_len * call_thr_high and mc_cnt>1:
+                        genotype = "1/1"
+                    elif smc_cnt > base_len * call_thr_low and mc_cnt>1:
+                        if smc == '.':
+                            genotype = "0/1"
+                        else:
+                            if alt == piled_up.ref:
+                                alt = smc
+                                genotype = "0/1"
+                            else:
+                                alt = [alt, smc]
+                                genotype = "1/2"
+                    else:
+                        alt = piled_up.ref
+                        genotype = "0/0"
 
-        if mc == '.':
-            if smc_cnt > base_len * call_thr_low and smc_cnt>1:
-                alt = smc
+
+    if genotype == "1/2":
+        if alt[0]==piled_up.ref or alt[1]==piled_up.ref:
+            if alt[0] == piled_up.ref:
+                alt = alt[1]
                 genotype = "0/1"
             else:
-                # if known_found != -1 and smc_cnt>base_len * 0.2:
-                #     alt = smc
-                #     genotype = "0/1"
-                # else:
-                alt = piled_up.ref
-                genotype = "0/0"
-        else:
-            alt = mc
-            if mc_cnt > base_len * call_thr_high and mc_cnt>1:
-                genotype = "1/1"
-            elif smc_cnt > base_len * call_thr_low and mc_cnt>1:
-                if smc == '.':
-                    genotype = "0/1"
-                else:
-                    alt = [alt, smc]
-                    genotype = "1/2"
-            else:
-                alt = piled_up.ref
-                genotype = "0/0"
-
-
-    if genotype != "0/0":
+                alt = alt[0]
+                genotype = "0/1"
+    if genotype != "0/0" and piled_up.ref != alt:
         #variant_quality = quality(Y_instead_indel.replace("$","").replace("^","").replace("]", "").replace("!", "").replace("I", "") ,str(piled_up.quality), alt)
 
         indel_flag = None
@@ -247,7 +262,10 @@ for iter in lines:
                 alt = reference + indel[2:-1]
             else:
                 alt = reference
-                reference = reference + indel[2:-1]
+                if indel[2:-1].isdigit():
+                    reference = reference + 'A'
+                else:
+                    reference = reference + indel[2:-1]
 
         #Printing VCF rows after header
         #Chrom
@@ -259,10 +277,17 @@ for iter in lines:
         #Reference
         vcf += "\t"+str(reference)
         #Alt
-        if genotype == "1/2":
-            vcf += "\t"+str(alt[0])+","+str(alt[1])
-        else:
-            vcf += "\t"+str(alt)
+        if alt != 'Z' and alt != 'Y':
+            if genotype == "1/2":
+                if 'Y' not in alt and 'Z' not in alt:
+                    vcf += "\t"+str(alt[0])+","+str(alt[1])
+                else:
+                    indel_flag = "INDEL"
+                    alt = reference + indel[2:-1]
+                    vcf += "\t"+str(alt)
+                    genotype = "0/1"
+            else:
+                vcf += "\t"+str(alt)
         #Quality
         #if variant_quality == None:
         variant_quality = 0
