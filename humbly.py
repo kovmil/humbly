@@ -259,7 +259,10 @@ for iter in lines:
         if alt == 'Y' or alt == 'Z':
             indel_flag = "INDEL"
             if indel[0] == '+':
-                alt = reference + indel[2:-1]
+                if indel[2:-1].isdigit():
+                    alt = reference + 'A'
+                else:
+                    alt = reference + indel[2:-1]
             else:
                 alt = reference
                 if indel[2:-1].isdigit():
